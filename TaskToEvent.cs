@@ -26,41 +26,12 @@ namespace TaskToEvent {
             System.IO.Directory.CreateDirectory(
                 Environment.GetFolderPath(Environment.SpecialFolder.UserProfile) + "\\tasktoevent\\");
 
-            var user = await graphClient.Me.Request().GetAsync();
-            Console.WriteLine(user.DisplayName);
 
             var tasks = await GetTasks(graphClient);
             var calendar = await FindCalendar(graphClient);
             var events = await GetEvents(graphClient, calendar);
 
-            foreach (var newEvent in tasks.Select(task => new Event {
-                Subject = task.Title,
-                Body = new ItemBody {
-                    Content = "Microsoft To Do Reminder"
-                },
-                Start = task.ReminderDateTime,
-                End = task.ReminderDateTime,
-                IsReminderOn = false
-            })) {
-                var result = events.FirstOrDefault(e =>
-                    e.Subject.Equals(newEvent.Subject) && e.Body.Content.Contains(newEvent.Body.Content));
-
-                if (result != null) {
-                    //Check if it has a different timestamp, overwrite with this one?
-                    if (result.Start.DateTime.Equals(newEvent.Start.DateTime)) {
-                        //Same time zone, same time, no need to update
-                        continue;
-                    }
-
-                    // Else, replace that one with this one
-                    await graphClient.Me.Events[result.Id].Request().UpdateAsync(newEvent);
-                    continue;
-                }
-
-                await graphClient.Me.Calendars[calendar.Id].Events
-                    .Request()
-                    .AddAsync(newEvent);
-            }
+            await CreateEvents(graphClient, tasks, calendar, events);
         }
 
         /// <summary>
@@ -173,6 +144,44 @@ namespace TaskToEvent {
             }
 
             return events;
+        }
+
+        /// <summary>
+        /// Create the Events for each task in the specified calendar
+        /// </summary>
+        /// <param name="graphClient">The GraphClient to send requests to</param>
+        /// <param name="tasks">The list of tasks that need to have Events created for</param>
+        /// <param name="calendar">The Calendar that the events should be created in</param>
+        /// <param name="events">The list of Events that already exist to be used for duplicate checks</param>
+        private static async Task CreateEvents(GraphServiceClient graphClient, List<TodoTask> tasks, Calendar calendar, List<Event> events) {
+            foreach (var newEvent in tasks.Select(task => new Event {
+                Subject = task.Title,
+                Body = new ItemBody {
+                    Content = "Microsoft To Do Reminder"
+                },
+                Start = task.ReminderDateTime,
+                End = task.ReminderDateTime,
+                IsReminderOn = false
+            })) {
+                var result = events.FirstOrDefault(e =>
+                    e.Subject.Equals(newEvent.Subject) && e.Body.Content.Contains(newEvent.Body.Content));
+
+                if (result != null) {
+                    //Check if it has a different timestamp, overwrite with this one?
+                    if (result.Start.DateTime.Equals(newEvent.Start.DateTime)) {
+                        //Same time zone, same time, no need to update
+                        continue;
+                    }
+
+                    // Else, replace that one with this one
+                    await graphClient.Me.Events[result.Id].Request().UpdateAsync(newEvent);
+                    continue;
+                }
+
+                await graphClient.Me.Calendars[calendar.Id].Events
+                    .Request()
+                    .AddAsync(newEvent);
+            }
         }
     }
 }
