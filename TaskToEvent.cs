@@ -56,7 +56,7 @@ namespace TaskToEvent {
             // Add all tasks to the list
             var todoTasks = await graphClient.Me.Todo.Lists[list.Id].Tasks.Request().GetAsync();
             tasks.AddRange(todoTasks.Where(todoTask =>
-                todoTask.IsReminderOn != null && todoTask.CompletedDateTime == null &&
+                todoTask.IsReminderOn == true && todoTask.CompletedDateTime == null &&
                 todoTask.ReminderDateTime != null));
 
             // Look back a set number of pages for more tasks
@@ -65,7 +65,8 @@ namespace TaskToEvent {
                     todoTasks = await todoTasks.NextPageRequest.GetAsync();
 
                 tasks.AddRange(todoTasks.Where(todoTask =>
-                    todoTask.IsReminderOn != null && todoTask.CompletedDateTime == null));
+                    todoTask.IsReminderOn == true && todoTask.CompletedDateTime == null &&
+                    todoTask.ReminderDateTime != null));
             }
 
             return tasks;
