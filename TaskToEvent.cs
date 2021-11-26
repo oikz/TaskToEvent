@@ -39,7 +39,8 @@ namespace TaskToEvent {
                     Content = "Microsoft To Do Reminder"
                 },
                 Start = task.ReminderDateTime,
-                End = task.ReminderDateTime
+                End = task.ReminderDateTime,
+                IsReminderOn = false
             })) {
                 var result = events.FirstOrDefault(e =>
                     e.Subject.Equals(newEvent.Subject) && e.Body.Content.Contains(newEvent.Body.Content));
