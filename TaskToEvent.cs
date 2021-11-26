@@ -9,6 +9,7 @@ namespace TaskToEvent {
         private const string AppId = "855929bc-bbb8-475b-84ff-7a93c0b91019"; //Spooky appID
         private static readonly string[] Scopes = { "User.Read", "Tasks.Read", "Calendars.ReadWrite" };
         private const string ListName = "Tasks";
+        private const int LookBackPages = 50;
 
         /// <summary>
         /// Initialise the application and authenticate the user
@@ -44,6 +45,14 @@ namespace TaskToEvent {
             var todoTasks = await graphClient.Me.Todo.Lists[list.Id].Tasks.Request().GetAsync();
             tasks.AddRange(todoTasks.Where(todoTask =>
                 todoTask.IsReminderOn != null && todoTask.CompletedDateTime == null));
+
+            for (var i = 0; i < LookBackPages; i++) {
+                if (todoTasks.NextPageRequest != null)
+                    todoTasks = await todoTasks.NextPageRequest.GetAsync();
+
+                tasks.AddRange(todoTasks.Where(todoTask =>
+                    todoTask.IsReminderOn != null && todoTask.CompletedDateTime == null));
+            }
 
 
             foreach (var todoTask in tasks) {
