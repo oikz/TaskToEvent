@@ -8,9 +8,9 @@ namespace TaskToEvent {
     public class TaskToEvent {
         private const string AppId = "855929bc-bbb8-475b-84ff-7a93c0b91019"; //Spooky appID
         private static readonly string[] Scopes = { "User.Read", "Tasks.Read", "Calendars.ReadWrite" };
-        private const string ListName = "Tasks";
-        private const int LookBackPages = 50;
-        private const string CalendarName = "Calendar";
+        private static string _listName = "";
+        private static int _lookBackPages = -1;
+        private static string _calendarName = "";
 
         /// <summary>
         /// Initialise the application and authenticate the user
@@ -26,13 +26,70 @@ namespace TaskToEvent {
             System.IO.Directory.CreateDirectory(
                 Environment.GetFolderPath(Environment.SpecialFolder.UserProfile) + "\\tasktoevent\\");
 
-
+            await LoadConfig();
             var tasks = await GetTasks(graphClient);
             var calendar = await FindCalendar(graphClient);
             var events = await GetEvents(graphClient, calendar);
 
             await CreateEvents(graphClient, tasks, calendar, events);
+
+            Console.WriteLine("Done!");
         }
+
+        private static async Task LoadConfig() {
+            var configPath = Environment.GetFolderPath(Environment.SpecialFolder.UserProfile) +
+                             "\\tasktoevent\\config.txt";
+
+            //Load Config
+            if (System.IO.File.Exists(configPath)) {
+                await LoadConfigFile(configPath);
+            } else {
+                LoadDefaults();
+            }
+        }
+
+        /// <summary>
+        /// Load in the entire config file and read the values
+        /// </summary>
+        /// <param name="configPath">The file path of the configuration file</param>
+        private static async Task LoadConfigFile(string configPath) {
+            var lines = await System.IO.File.ReadAllLinesAsync(configPath);
+            foreach (var line in lines) {
+                switch (line) {
+                    case { } when line.Contains("List="):
+                        _listName = line.Split('=')[1];
+                        break;
+                    case { } when line.Contains("Calendar="):
+                        _calendarName = line.Split('=')[1];
+                        break;
+                    case { } when line.Contains("LookBackPages="):
+                        try {
+                            _lookBackPages = Convert.ToInt32(line.Split('=')[1]);
+                        } catch (FormatException) {
+                            Console.WriteLine("LookBackPages must be an integer");
+                        }
+
+                        break;
+                }
+            }
+
+            //If any of the values were not initialised correctly, display error and exit
+            if (!_listName.Any() || !_calendarName.Any() || _lookBackPages == -1) {
+                Console.WriteLine("Config file is missing values");
+                Environment.Exit(0);
+            }
+        }
+
+        /// <summary>
+        /// Load a set of default values to be used with no provided configuration file
+        /// </summary>
+        private static void LoadDefaults() {
+            //Load default config
+            _listName = "Tasks";
+            _calendarName = "Calendar";
+            _lookBackPages = 50;
+        }
+
 
         /// <summary>
         /// Get all of the tasks in the specified list
@@ -50,7 +107,7 @@ namespace TaskToEvent {
                 todoTask.ReminderDateTime != null));
 
             // Look back a set number of pages for more tasks
-            for (var i = 0; i < LookBackPages; i++) {
+            for (var i = 0; i < _lookBackPages; i++) {
                 if (todoTasks.NextPageRequest != null)
                     todoTasks = await todoTasks.NextPageRequest.GetAsync();
 
@@ -70,7 +127,7 @@ namespace TaskToEvent {
         private static async Task<TodoTaskList> FindList(GraphServiceClient graphClient) {
             var taskLists = await graphClient.Me.Todo.Lists.Request().GetAsync();
             foreach (var taskList in taskLists) {
-                if (taskList.DisplayName == ListName) {
+                if (taskList.DisplayName == _listName) {
                     return taskList;
                 }
             }
@@ -81,7 +138,7 @@ namespace TaskToEvent {
                     taskLists = await taskLists.NextPageRequest.GetAsync();
 
                 foreach (var taskList in taskLists) {
-                    if (taskList.DisplayName == ListName) {
+                    if (taskList.DisplayName == _listName) {
                         return taskList;
                     }
                 }
@@ -102,7 +159,7 @@ namespace TaskToEvent {
             var calendars = await graphClient.Me.Calendars.Request().GetAsync();
 
             foreach (var calendar in calendars) {
-                if (calendar.Name == CalendarName) {
+                if (calendar.Name == _calendarName) {
                     return calendar;
                 }
             }
@@ -113,7 +170,7 @@ namespace TaskToEvent {
                     calendars = await calendars.NextPageRequest.GetAsync();
 
                 foreach (var calendar in calendars) {
-                    if (calendar.Name == CalendarName) {
+                    if (calendar.Name == _calendarName) {
                         return calendar;
                     }
                 }
@@ -136,7 +193,7 @@ namespace TaskToEvent {
             var events = response.ToList();
 
             //Get more calendar events
-            for (var i = 0; i < LookBackPages; i++) {
+            for (var i = 0; i < _lookBackPages; i++) {
                 if (response.NextPageRequest != null)
                     response = await response.NextPageRequest.GetAsync();
 
@@ -153,7 +210,8 @@ namespace TaskToEvent {
         /// <param name="tasks">The list of tasks that need to have Events created for</param>
         /// <param name="calendar">The Calendar that the events should be created in</param>
         /// <param name="events">The list of Events that already exist to be used for duplicate checks</param>
-        private static async Task CreateEvents(GraphServiceClient graphClient, List<TodoTask> tasks, Calendar calendar, List<Event> events) {
+        private static async Task CreateEvents(GraphServiceClient graphClient, List<TodoTask> tasks, Calendar calendar,
+            List<Event> events) {
             foreach (var newEvent in tasks.Select(task => new Event {
                 Subject = task.Title,
                 Body = new ItemBody {
