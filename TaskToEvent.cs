@@ -31,16 +31,22 @@ namespace TaskToEvent {
 
             var tasks = await GetTasks(graphClient);
             var calendar = await FindCalendar(graphClient);
+            var events = await GetEvents(graphClient, calendar);
 
             foreach (var newEvent in tasks.Select(task => new Event {
                 Subject = task.Title,
+                Body = new ItemBody {
+                    Content = "Microsoft To Do Reminder"
+                },
                 Start = task.ReminderDateTime,
                 End = task.ReminderDateTime
             })) {
+                if (events.Any(e => e.Subject.Equals(newEvent.Subject) && e.Body.Content.Contains(newEvent.Body.Content)))
+                    continue;
+
                 await graphClient.Me.Calendars[calendar.Id].Events
                     .Request()
                     .AddAsync(newEvent);
-                //calendar.Events.Add(newEvent);
             }
         }
 
@@ -117,7 +123,7 @@ namespace TaskToEvent {
                 }
             }
 
-            //Retry looking for the task list up to 5 times
+            //Retry looking for the calendar up to 5 times
             for (var i = 0; i < 5; i++) {
                 if (calendars.NextPageRequest != null)
                     calendars = await calendars.NextPageRequest.GetAsync();
@@ -133,6 +139,27 @@ namespace TaskToEvent {
             Environment.Exit(0);
 
             return new Calendar();
+        }
+
+        /// <summary>
+        /// Get all of the events in the specified calendar
+        /// </summary>
+        /// <param name="graphClient">The GraphClient to send requests to</param>
+        /// <param name="calendar">The Calendar to find events in</param>
+        /// <returns>A list of events in the specified calendar</returns>
+        private static async Task<List<Event>> GetEvents(GraphServiceClient graphClient, Calendar calendar) {
+            var response = await graphClient.Me.Calendars[calendar.Id].Events.Request().GetAsync();
+            var events = response.ToList();
+
+            //Get more calendar events
+            for (var i = 0; i < LookBackPages; i++) {
+                if (response.NextPageRequest != null)
+                    response = await response.NextPageRequest.GetAsync();
+
+                events.AddRange(response);
+            }
+
+            return events;
         }
     }
 }
