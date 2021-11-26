@@ -26,18 +26,19 @@ namespace TaskToEvent {
             System.IO.Directory.CreateDirectory(
                 Environment.GetFolderPath(Environment.SpecialFolder.UserProfile) + "\\tasktoevent\\");
 
-            await GetTasks(graphClient);
+            var user = await graphClient.Me.Request().GetAsync();
+            Console.WriteLine(user.DisplayName);
+
+            var tasks = await GetTasks(graphClient);
+            var calendar = await FindCalendar(graphClient);
+
         }
 
         /// <summary>
         /// Get all of the tasks in the specified list
         /// </summary>
         /// <param name="graphClient">The GraphClient to send requests to</param>
-        private static async Task GetTasks(GraphServiceClient graphClient) {
-            //Get all tasks
-            var user = await graphClient.Me.Request().GetAsync();
-            Console.WriteLine(user.DisplayName);
-
+        private static async Task<List<TodoTask>> GetTasks(GraphServiceClient graphClient) {
             // Find the user specified list
             var list = await FindList(graphClient);
             var tasks = new List<TodoTask>();
@@ -47,6 +48,7 @@ namespace TaskToEvent {
             tasks.AddRange(todoTasks.Where(todoTask =>
                 todoTask.IsReminderOn != null && todoTask.CompletedDateTime == null));
 
+            // Look back a set number of pages for more tasks
             for (var i = 0; i < LookBackPages; i++) {
                 if (todoTasks.NextPageRequest != null)
                     todoTasks = await todoTasks.NextPageRequest.GetAsync();
@@ -55,16 +57,7 @@ namespace TaskToEvent {
                     todoTask.IsReminderOn != null && todoTask.CompletedDateTime == null));
             }
 
-
-            foreach (var todoTask in tasks) {
-                Console.WriteLine($"Task: {todoTask.Title}");
-                //Make a new event
-                
-                
-            }
-            
-            var calendar = await FindCalendar(graphClient);
-            Console.WriteLine(calendar.Name);
+            return tasks;
         }
 
         /// <summary>
@@ -123,7 +116,7 @@ namespace TaskToEvent {
                     }
                 }
             }
-            
+
             Console.WriteLine("Could not find Calendar");
             Environment.Exit(0);
 
