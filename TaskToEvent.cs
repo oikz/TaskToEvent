@@ -10,6 +10,7 @@ namespace TaskToEvent {
         private static readonly string[] Scopes = { "User.Read", "Tasks.Read", "Calendars.ReadWrite" };
         private const string ListName = "Tasks";
         private const int LookBackPages = 50;
+        private const string CalendarName = "University";
 
         /// <summary>
         /// Initialise the application and authenticate the user
@@ -57,12 +58,13 @@ namespace TaskToEvent {
 
             foreach (var todoTask in tasks) {
                 Console.WriteLine($"Task: {todoTask.Title}");
+                //Make a new event
+                
+                
             }
             
-            var calendars = await graphClient.Me.Calendars.Request().GetAsync();
-            foreach (var calendar in calendars) {
-                Console.WriteLine($"Calendar: {calendar.Name}");
-            }
+            var calendar = await FindCalendar(graphClient);
+            Console.WriteLine(calendar.Name);
         }
 
         /// <summary>
@@ -94,6 +96,38 @@ namespace TaskToEvent {
             Environment.Exit(0);
 
             return new TodoTaskList();
+        }
+
+        /// <summary>
+        /// Find the Calendar specified by the user
+        /// </summary>
+        /// <param name="graphClient">The GraphClient to send requests to</param>
+        /// <returns>The Calendar</returns>
+        private static async Task<Calendar> FindCalendar(GraphServiceClient graphClient) {
+            var calendars = await graphClient.Me.Calendars.Request().GetAsync();
+
+            foreach (var calendar in calendars) {
+                if (calendar.Name == CalendarName) {
+                    return calendar;
+                }
+            }
+
+            //Retry looking for the task list up to 5 times
+            for (var i = 0; i < 5; i++) {
+                if (calendars.NextPageRequest != null)
+                    calendars = await calendars.NextPageRequest.GetAsync();
+
+                foreach (var calendar in calendars) {
+                    if (calendar.Name == CalendarName) {
+                        return calendar;
+                    }
+                }
+            }
+            
+            Console.WriteLine("Could not find Calendar");
+            Environment.Exit(0);
+
+            return new Calendar();
         }
     }
 }
