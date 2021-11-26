@@ -41,8 +41,20 @@ namespace TaskToEvent {
                 Start = task.ReminderDateTime,
                 End = task.ReminderDateTime
             })) {
-                if (events.Any(e => e.Subject.Equals(newEvent.Subject) && e.Body.Content.Contains(newEvent.Body.Content)))
+                var result = events.FirstOrDefault(e =>
+                    e.Subject.Equals(newEvent.Subject) && e.Body.Content.Contains(newEvent.Body.Content));
+
+                if (result != null) {
+                    //Check if it has a different timestamp, overwrite with this one?
+                    if (result.Start.DateTime.Equals(newEvent.Start.DateTime)) {
+                        //Same time zone, same time, no need to update
+                        continue;
+                    }
+
+                    // Else, replace that one with this one
+                    await graphClient.Me.Events[result.Id].Request().UpdateAsync(newEvent);
                     continue;
+                }
 
                 await graphClient.Me.Calendars[calendar.Id].Events
                     .Request()
