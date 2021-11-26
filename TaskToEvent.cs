@@ -10,7 +10,7 @@ namespace TaskToEvent {
         private static readonly string[] Scopes = { "User.Read", "Tasks.Read", "Calendars.ReadWrite" };
         private const string ListName = "Tasks";
         private const int LookBackPages = 50;
-        private const string CalendarName = "University";
+        private const string CalendarName = "Calendar";
 
         /// <summary>
         /// Initialise the application and authenticate the user
@@ -32,6 +32,16 @@ namespace TaskToEvent {
             var tasks = await GetTasks(graphClient);
             var calendar = await FindCalendar(graphClient);
 
+            foreach (var newEvent in tasks.Select(task => new Event {
+                Subject = task.Title,
+                Start = task.ReminderDateTime,
+                End = task.ReminderDateTime
+            })) {
+                await graphClient.Me.Calendars[calendar.Id].Events
+                    .Request()
+                    .AddAsync(newEvent);
+                //calendar.Events.Add(newEvent);
+            }
         }
 
         /// <summary>
@@ -46,7 +56,8 @@ namespace TaskToEvent {
             // Add all tasks to the list
             var todoTasks = await graphClient.Me.Todo.Lists[list.Id].Tasks.Request().GetAsync();
             tasks.AddRange(todoTasks.Where(todoTask =>
-                todoTask.IsReminderOn != null && todoTask.CompletedDateTime == null));
+                todoTask.IsReminderOn != null && todoTask.CompletedDateTime == null &&
+                todoTask.ReminderDateTime != null));
 
             // Look back a set number of pages for more tasks
             for (var i = 0; i < LookBackPages; i++) {
